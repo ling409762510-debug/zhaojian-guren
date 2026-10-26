@@ -2,6 +2,40 @@
   'use strict';
   const { questions, report, actions, closing, sources } = window.ARCHIVE;
   const app = document.getElementById('app');
+  // 固定口令仅限制网页入口，不能代替服务端付费授权。
+  const accessHash = 'd848d3ae5473fa93392cf33ef27d0fe05cdedf65cbb30ce45630d80ff60df268';
+  const accessKey = 'zhaojian-access-v1';
+  let unlocked = false;
+  try { unlocked = sessionStorage.getItem(accessKey) === accessHash; } catch {}
+  function accessGate() {
+    app.innerHTML = `<section class="access-page fade-in"><div class="access-art"><img src="${window.PORTRAIT}" alt="李清照艺术想象画像"><span class="seal">照见</span></div><div class="access-copy"><div class="eyebrow">照见古人 · 入卷凭笺</div><h1>你的故事，<br>从这一笺开始。</h1><p class="scene">输入测试码，翻开六个生活片刻，<br>读一份关于敏锐与自持的档案。</p><form id="access-form"><label for="access-code">测试码</label><input id="access-code" name="code" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="64" required placeholder="请输入你收到的测试码" aria-describedby="access-message"><p id="access-message" role="status" aria-live="polite">不区分大小写，请保留码中的连字符。</p><button class="button primary" type="submit">验证并进入　↗</button></form><p class="small-note">体验样板 · 固定李清照示例报告<br>历史人物主题的趣味自我探索，非专业心理测评。<br>还没有测试码？请向提供本链接的人获取。</p></div></section>`;
+  }
+  app.addEventListener('submit', async e => {
+    if (e.target.id !== 'access-form') return;
+    e.preventDefault();
+    const field = document.getElementById('access-code');
+    const message = document.getElementById('access-message');
+    const submit = e.target.querySelector('button');
+    const code = field.value.trim().toUpperCase();
+    if (!code) { message.textContent = '请先输入测试码。'; field.focus(); return; }
+    submit.disabled = true;
+    try {
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(code));
+      const hash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2,'0')).join('');
+      if (hash !== accessHash) {
+        field.setAttribute('aria-invalid','true');
+        message.textContent = '测试码不正确，请核对后重试。';
+        field.focus();
+        return;
+      }
+      unlocked = true;
+      try { sessionStorage.setItem(accessKey, accessHash); } catch {}
+      field.value = '';
+      route();
+    } catch {
+      message.textContent = '验证暂不可用，请用最新版浏览器打开 HTTPS 网页后重试。';
+    } finally { submit.disabled = false; }
+  });
   const key = 'zhaojian-sample-v1';
   let storageOK = true;
   let state = { answers: Array(questions.length).fill(null), index: 0 };
@@ -29,13 +63,19 @@
     app.innerHTML = `<article class="report fade-in"><div class="page-top"><button class="text-button" data-action="${complete()?'review':'home'}">← ${complete()?'回看我的选择':'返回书房'}</button><span>档案 NO.001 · 示例报告</span></div><section class="report-cover"><div class="report-portrait">${portrait()}<div class="art-foot"><span>原创艺术想象画像</span><span class="seal">易安</span></div></div><div class="report-cover-copy"><div class="eyebrow">照见古人 · 人物收藏档案</div><h1>李清照</h1><p class="report-subtitle">宋代词人 · 号易安居士</p><h2 class="report-theme">敏锐与自持</h2><div class="tags"><span>细腻感知</span><span>审美自觉</span><span>内在尺度</span></div><p class="cover-quote">把感受留给文字，<br>把分寸留给自己。</p><p class="small-note">原创解读语 · 非古人名言<br>固定示例报告，不代表本次答题的匹配结果。</p></div></section><div class="report-layout"><nav class="report-nav" aria-label="报告章节">${report.map((s,i)=>`<a href="#section-${i}">${s.label}</a>`).join('')}<a href="#practice">07 / 给自己的练习</a><a href="#sources">史料与解读说明</a></nav><div class="report-body">${report.map((s,i)=>`<section class="report-section" id="section-${i}"><div class="chapter">${s.label}</div><h2>${s.title}</h2>${s.paragraphs.map(p=>`<p>${p}</p>`).join('')}${s.source?'<p class="source-link">史料依据：《金石录后序》 · <a href="#sources">查看出处与说明 ↗</a></p>':''}</section>`).join('')}<section class="report-section" id="practice"><div class="chapter">07 / 给自己的练习</div><h2>从一件小事，慢慢开始。</h2><div class="actions-list">${actions.map((a,i)=>`<div class="action-item"><span>0${i+1}</span><div><h3>${a.title}</h3><p>${a.text}</p></div></div>`).join('')}</div></section><section class="closing"><div class="chapter">卷末 · 留白</div><h2>细腻可贵，你也一样。</h2><p>${closing}</p></section><div class="report-buttons">${button('收藏我的示例人物卡　↓','share',true)}<button class="text-button" data-action="home">返回首页</button><button class="text-button" data-action="reset">清空记录，重新体验</button></div><details class="sources" id="sources"><summary>查看史料出处与解读边界</summary><p>历史事实主要见第二节，其余为原创的现代生活观察与自我对照建议，并非史料结论。未对古人进行心理测评，也未从六道题推断你的完整人格。不认同的部分，无需勉强套用。</p><ul>${sources.map(s=>`<li><a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.name} ↗</a><br>${s.note}</li>`).join('')}</ul><p>本页画像为 AI 辅助创作的艺术想象，不代表李清照的真实容貌。历史人物主题的趣味自我探索，非专业心理测评。</p></details></div></div></article>`;
   }
   function route() {
+    if (!unlocked) { accessGate(); window.scrollTo(0,0); return; }
     const hash = location.hash.slice(1) || 'home';
-    if (hash.startsWith('section-') || ['practice','sources'].includes(hash)) return;
+    if (hash.startsWith('section-') || ['practice','sources'].includes(hash)) {
+      renderReport();
+      requestAnimationFrame(()=>document.getElementById(hash)?.scrollIntoView());
+      return;
+    }
     ({home, quiz, review, report:renderReport}[hash] || home)();
     window.scrollTo(0,0);
   }
   function navigate(page) { if (location.hash === '#' + page) route(); else location.hash = page; }
   app.addEventListener('click', e => {
+    if (!unlocked) return;
     const target = e.target.closest('button'); if (!target) return;
     if (target.dataset.option !== undefined) {
       state.answers[state.index] = Number(target.dataset.option); persist();
@@ -91,5 +131,5 @@
   document.getElementById('close-share').addEventListener('click',()=>document.getElementById('share-dialog').close());
   document.getElementById('share-dialog').addEventListener('click',e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.currentTarget.close();}});
   window.addEventListener('hashchange',route);
-  if (/^#(section-|practice|sources)/.test(location.hash)) { renderReport(); requestAnimationFrame(()=>document.querySelector(location.hash)?.scrollIntoView()); } else route();
+  route();
 })();
